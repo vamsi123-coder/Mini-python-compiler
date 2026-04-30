@@ -43,7 +43,7 @@ class SymbolTable:
         print("└────────────────────────────────────┘")
 
 class Lexer:
-    KEYWORDS = {'if', 'else', 'while', 'print', 'True', 'False'}
+    KEYWORDS = {'if', 'else', 'while', 'print', 'True', 'False', 'for', 'in', 'range'}
     OPERATORS = {'+', '-', '*', '/', '=', '>=', '<=', '>', '<', '=='}
     
     def __init__(self, code):
@@ -57,7 +57,15 @@ class Lexer:
         self.code = re.sub(r'#.*$', '', self.code, flags=re.MULTILINE)  # Remove comments
         
         for line_no, line in enumerate(self.code.split('\n'), 1):
-            i = 0
+            if not line.strip() or line.strip().startswith('#'):
+                continue
+                
+            # Basic indentation detection
+            indent_spaces = len(line) - len(line.lstrip())
+            if indent_spaces > 0:
+                self.tokens.append(Token('INDENT', 'INDENT'))
+                
+            i = indent_spaces
             while i < len(line):
                 # Skip whitespace
                 if line[i].isspace():
@@ -71,7 +79,7 @@ class Lexer:
                     continue
                 
                 # Single-char operators
-                if line[i] in '+-*/=':
+                if line[i] in '+-*/=><':
                     self.tokens.append(Token(line[i], line[i]))
                     i += 1
                     continue
@@ -165,6 +173,12 @@ class Parser:
     def parse_statement(self):
         if self.current.type == 'IF':
             return self.parse_if()
+        elif self.current.type == 'WHILE':
+            return self.parse_while()
+        elif self.current.type == 'FOR':
+            return self.parse_for()
+        elif self.current.type == 'PRINT':
+            return self.parse_print()
         else:
             return self.parse_assignment()
     
@@ -174,19 +188,69 @@ class Parser:
         expr = self.parse_expression()
         return ASTNode('=', [expr], id_token.value)
     
+    def parse_block(self):
+        body = []
+        while self.current and self.current.type == 'INDENT':
+            self.consume('INDENT')
+            body.append(self.parse_statement())
+        if not body and self.current:
+            body.append(self.parse_statement())
+        return ASTNode('BODY', body)
+        
+    def parse_print(self):
+        self.consume('PRINT')
+        has_paren = False
+        if self.current and self.current.type == '(':
+            self.consume('(')
+            has_paren = True
+        elif self.current and self.current.type == '=':
+            # Handle assignment to print (e.g. print = 1)
+            self.consume('=')
+            expr = self.parse_expression()
+            return ASTNode('=', [expr], 'print')
+        
+        expr = self.parse_expression()
+        if has_paren:
+            self.consume(')')
+        return ASTNode('PRINT', [expr])
+
     def parse_if(self):
         self.consume('IF')
-        self.consume('(')
+        has_paren = False
+        if self.current and self.current.type == '(':
+            self.consume('(')
+            has_paren = True
         cond = self.parse_expression()
+        if has_paren:
+            self.consume(')')
+        self.consume(':')
+        body = self.parse_block()
+        return ASTNode('IF', [cond, body])
+        
+    def parse_while(self):
+        self.consume('WHILE')
+        has_paren = False
+        if self.current and self.current.type == '(':
+            self.consume('(')
+            has_paren = True
+        cond = self.parse_expression()
+        if has_paren:
+            self.consume(')')
+        self.consume(':')
+        body = self.parse_block()
+        return ASTNode('WHILE', [cond, body])
+        
+    def parse_for(self):
+        self.consume('FOR')
+        id_token = self.consume('ID')
+        self.consume('IN')
+        self.consume('RANGE')
+        self.consume('(')
+        limit = self.parse_expression()
         self.consume(')')
         self.consume(':')
-        # In a real parser, this would handle indentation
-        # For now, we just continue parsing until we hit another if or end
-        body = []
-        # Just parse the next statement as the body
-        if self.current and self.current.type != 'IF':
-            body.append(self.parse_statement())
-        return ASTNode('IF', [cond, ASTNode('BODY', body)])
+        body = self.parse_block()
+        return ASTNode('FOR', [ASTNode('ID', [], id_token.value), limit, body])
     
     def parse_expression(self):
         return self.parse_comparison()
@@ -298,6 +362,37 @@ class CodeGenerator:
             self.emit('if_not', cond, '', label_false)
             self.gen_node(node.children[1])
             self.emit('label', label_false)
+            
+        elif node.type == 'WHILE':
+            label_start = self.new_label()
+            label_end = self.new_label()
+            self.emit('label', label_start)
+            cond = self.gen_node(node.children[0])
+            self.emit('if_not', cond, '', label_end)
+            self.gen_node(node.children[1])
+            self.emit('goto', '', '', label_start)
+            self.emit('label', label_end)
+            
+        elif node.type == 'FOR':
+            var_name = node.children[0].value
+            self.emit('=', '0', '', var_name)
+            label_start = self.new_label()
+            label_end = self.new_label()
+            self.emit('label', label_start)
+            limit = self.gen_node(node.children[1])
+            cond_res = self.new_temp()
+            self.emit('<', var_name, limit, cond_res)
+            self.emit('if_not', cond_res, '', label_end)
+            self.gen_node(node.children[2])
+            temp_inc = self.new_temp()
+            self.emit('+', var_name, '1', temp_inc)
+            self.emit('=', temp_inc, '', var_name)
+            self.emit('goto', '', '', label_start)
+            self.emit('label', label_end)
+            
+        elif node.type == 'PRINT':
+            res = self.gen_node(node.children[0])
+            self.emit('print', res, '', '')
         
         elif node.type == 'BODY':
             for child in node.children:
@@ -493,10 +588,8 @@ def compile_program(source_code):
     ast = parser.parse()
     print("│ Abstract Syntax Tree:                                          │")
     ast_str = str(ast).split('\n')
-    for line in ast_str[:10]:  # Show first 10 lines
+    for line in ast_str:
         print(f"│ {line:<65} │")
-    if len(ast_str) > 10:
-        print(f"│ ... ({len(ast_str) - 10} more lines)")
     print("└────────────────────────────────────────────────────────────────┘")
     
     # PHASE 3: ICG
@@ -515,14 +608,12 @@ def compile_program(source_code):
     print("├──────┬─────────┬──────────┬──────────┬──────────┤")
     print("│ Idx  │ Operator│ Arg1     │ Arg2     │ Result   │")
     print("├──────┼─────────┼──────────┼──────────┼──────────┤")
-    for i, (op, arg1, arg2, result) in enumerate(quadruples[:15]):
+    for i, (op, arg1, arg2, result) in enumerate(quadruples):
         op_disp = op[:7] if len(op) <= 7 else op[:4]+"."
         arg1_d = str(arg1)[:8] if arg1 else "-"
         arg2_d = str(arg2)[:8] if arg2 else "-"
         res_d = str(result)[:8] if result else "-"
         print(f"│ {i:<4} │ {op_disp:<7} │ {arg1_d:<8} │ {arg2_d:<8} │ {res_d:<8} │")
-    if len(quadruples) > 15:
-        print(f"│ ...  │ ... more {len(quadruples) - 15} instructions ...                   │")
     print("└──────┴─────────┴──────────┴──────────┴──────────┘")
     
     # Display TRIPLES
@@ -531,13 +622,11 @@ def compile_program(source_code):
     print("├──────┬─────────┬──────────┬──────────┐")
     print("│ Idx  │ Operator│ Arg1     │ Arg2     │")
     print("├──────┼─────────┼──────────┼──────────┤")
-    for i, (op, arg1, arg2, idx) in enumerate(triples[:15]):
+    for i, (op, arg1, arg2, idx) in enumerate(triples):
         op_disp = op[:7] if len(op) <= 7 else op[:4]+"."
         arg1_d = str(arg1)[:8] if arg1 else "-"
         arg2_d = str(arg2)[:8] if arg2 else "-"
         print(f"│ {i:<4} │ {op_disp:<7} │ {arg1_d:<8} │ {arg2_d:<8} │")
-    if len(triples) > 15:
-        print(f"│ ...  │ ... more {len(triples) - 15} instructions ...        │")
     print("└──────┴─────────┴──────────┴──────────┘")
     
     # Display INDIRECT TRIPLES
@@ -548,14 +637,12 @@ def compile_program(source_code):
     print("├──────┬──────────┬──────┬─────────┬──────────┬──────────┐")
     print("│ Ptr  │ Instr#   │ Idx  │ Op      │ Arg1     │ Arg2     │")
     print("├──────┼──────────┼──────┼─────────┼──────────┼──────────┤")
-    for i, (op, arg1, arg2) in enumerate(indirect_triples[:15]):
+    for i, (op, arg1, arg2) in enumerate(indirect_triples):
         ptr = index_table[i] if i < len(index_table) else i
         op_disp = op[:7] if len(op) <= 7 else op[:4]+"."
         arg1_d = str(arg1)[:8] if arg1 else "-"
         arg2_d = str(arg2)[:8] if arg2 else "-"
         print(f"│ {i:<4} │ {ptr:<8} │ {i:<4} │ {op_disp:<7} │ {arg1_d:<8} │ {arg2_d:<8} │")
-    if len(indirect_triples) > 15:
-        print(f"│ ...  │ ... more {len(indirect_triples) - 15} instructions ...                        │")
     print("└──────┴──────────┴──────┴─────────┴──────────┴──────────┘")
     print("└────────────────────────────────────────────────────────────────┘")
     
@@ -573,14 +660,12 @@ def compile_program(source_code):
     print("├──────┬─────────┬──────────┬──────────┬──────────┤")
     print("│ Idx  │ Operator│ Arg1     │ Arg2     │ Result   │")
     print("├──────┼─────────┼──────────┼──────────┼──────────┤")
-    for i, (op, arg1, arg2, result) in enumerate(opt_quadruples[:15]):
+    for i, (op, arg1, arg2, result) in enumerate(opt_quadruples):
         op_disp = op[:7] if len(op) <= 7 else op[:4]+"."
         arg1_d = str(arg1)[:8] if arg1 else "-"
         arg2_d = str(arg2)[:8] if arg2 else "-"
         res_d = str(result)[:8] if result else "-"
         print(f"│ {i:<4} │ {op_disp:<7} │ {arg1_d:<8} │ {arg2_d:<8} │ {res_d:<8} │")
-    if len(opt_quadruples) > 15:
-        print(f"│ ...  │ ... more {len(opt_quadruples) - 15} instructions ...                   │")
     print("└──────┴─────────┴──────────┴──────────┴──────────┘")
     print("└────────────────────────────────────────────────────────────────┘")
     
@@ -589,10 +674,8 @@ def compile_program(source_code):
     target_gen = TargetCodeGenerator()
     target_code = target_gen.generate(optimized_icg)
     print("│ Assembly-like Target Code:                                     │")
-    for i, instr in enumerate(target_code[:20]):
+    for i, instr in enumerate(target_code):
         print(f"│  {i:2d}. {instr:<62} │")
-    if len(target_code) > 20:
-        print(f"│  ... ({len(target_code) - 20} more instructions)")
     print("└────────────────────────────────────────────────────────────────┘")
     
     print("\n" + "="*70)
@@ -603,14 +686,263 @@ def compile_program(source_code):
         'tokens': tokens,
         'ast': ast,
         'icg': icg,
+        'triples': triples,
+        'indirect_triples': indirect_triples,
+        'index_table': index_table,
         'optimized_icg': optimized_icg,
         'target_code': target_code
     }
 
+import webbrowser
+import os
+
+def generate_html_report(result):
+    tokens_html = ""
+    for i, token in enumerate(result['tokens']):
+        if token.type != 'NL':
+            category = get_token_category(token)
+            tokens_html += f"<tr><td>{i}</td><td>{token.type}</td><td>{str(token.value)}</td><td>{category}</td></tr>"
+            
+    ast_html = "<pre>" + str(result['ast']).replace('<', '&lt;').replace('>', '&gt;') + "</pre>"
+    
+    icg_html = ""
+    for i, (op, arg1, arg2, res) in enumerate(result['icg']):
+        icg_html += f"<tr><td>{i}</td><td>{op}</td><td>{arg1}</td><td>{arg2}</td><td>{res}</td></tr>"
+        
+    triples_html = ""
+    for i, (op, arg1, arg2, idx) in enumerate(result['triples']):
+        triples_html += f"<tr><td>{i}</td><td>{op}</td><td>{arg1}</td><td>{arg2}</td></tr>"
+        
+    indirect_triples_html = ""
+    index_table = result['index_table']
+    for i, (op, arg1, arg2) in enumerate(result['indirect_triples']):
+        ptr = index_table[i] if i < len(index_table) else i
+        indirect_triples_html += f"<tr><td>{i}</td><td>{ptr}</td><td>{i}</td><td>{op}</td><td>{arg1}</td><td>{arg2}</td></tr>"
+        
+    opt_icg_html = ""
+    for i, (op, arg1, arg2, res) in enumerate(result['optimized_icg']):
+        opt_icg_html += f"<tr><td>{i}</td><td>{op}</td><td>{arg1}</td><td>{arg2}</td><td>{res}</td></tr>"
+        
+    target_html = ""
+    for i, instr in enumerate(result['target_code']):
+        target_html += f"<div>{i:2d}. {instr}</div>"
+
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Mini Python Compiler Report</title>
+        <style>
+            :root {{
+                --bg: #0f172a;
+                --surface: rgba(30, 41, 59, 0.7);
+                --text: #f8fafc;
+                --accent: #38bdf8;
+                --border: rgba(255, 255, 255, 0.1);
+            }}
+            body {{
+                font-family: 'Inter', system-ui, sans-serif;
+                background-color: var(--bg);
+                color: var(--text);
+                margin: 0;
+                padding: 2rem;
+                background-image: radial-gradient(circle at 50% 0%, #1e293b, #0f172a);
+                min-height: 100vh;
+            }}
+            .container {{
+                max-width: 1200px;
+                margin: 0 auto;
+            }}
+            h1 {{
+                text-align: center;
+                background: -webkit-linear-gradient(45deg, #38bdf8, #818cf8);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+                font-size: 3rem;
+                margin-bottom: 2rem;
+            }}
+            .tabs {{
+                display: flex;
+                gap: 1rem;
+                margin-bottom: 2rem;
+                justify-content: center;
+            }}
+            .tab-btn {{
+                background: var(--surface);
+                border: 1px solid var(--border);
+                color: var(--text);
+                padding: 1rem 2rem;
+                border-radius: 12px;
+                cursor: pointer;
+                font-size: 1.1rem;
+                backdrop-filter: blur(10px);
+                transition: all 0.3s ease;
+            }}
+            .tab-btn.active, .tab-btn:hover {{
+                background: rgba(56, 189, 248, 0.2);
+                border-color: var(--accent);
+                box-shadow: 0 0 20px rgba(56, 189, 248, 0.2);
+                transform: translateY(-2px);
+            }}
+            .tab-content {{
+                display: none;
+                background: var(--surface);
+                backdrop-filter: blur(10px);
+                border: 1px solid var(--border);
+                border-radius: 16px;
+                padding: 2rem;
+                animation: fadeIn 0.4s ease-out;
+                box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            }}
+            .tab-content.active {{
+                display: block;
+            }}
+            @keyframes fadeIn {{
+                from {{ opacity: 0; transform: translateY(10px); }}
+                to {{ opacity: 1; transform: translateY(0); }}
+            }}
+            table {{
+                width: 100%;
+                border-collapse: collapse;
+            }}
+            th, td {{
+                padding: 1rem;
+                text-align: left;
+                border-bottom: 1px solid var(--border);
+            }}
+            th {{
+                color: var(--accent);
+                font-weight: 600;
+            }}
+            tr:hover {{
+                background: rgba(255,255,255,0.05);
+            }}
+            pre, .code-block {{
+                font-family: 'Fira Code', monospace;
+                background: rgba(0,0,0,0.3);
+                padding: 1.5rem;
+                border-radius: 8px;
+                overflow-x: auto;
+                line-height: 1.6;
+            }}
+            hr {{
+                border: 0;
+                border-top: 1px solid var(--border);
+                margin: 3rem 0;
+            }}
+            .section-title {{
+                color: var(--accent);
+                font-size: 1.5rem;
+                margin-top: 2rem;
+                margin-bottom: 1rem;
+                border-left: 4px solid var(--accent);
+                padding-left: 1rem;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>Mini Python Compiler Output</h1>
+            
+            <div class="tabs">
+                <button class="tab-btn active" onclick="showTab('lexer')">1. Lexer</button>
+                <button class="tab-btn" onclick="showTab('ast')">2. AST Parser</button>
+                <button class="tab-btn" onclick="showTab('icg')">3. ICG</button>
+                <button class="tab-btn" onclick="showTab('opt')">4. Optimized ICG</button>
+                <button class="tab-btn" onclick="showTab('target')">5. Target Code</button>
+            </div>
+
+            <div id="lexer" class="tab-content active">
+                <h2>Lexical Analysis (Tokens)</h2>
+                <table>
+                    <tr><th>Index</th><th>Token Type</th><th>Value</th><th>Category</th></tr>
+                    {tokens_html}
+                </table>
+            </div>
+
+            <div id="ast" class="tab-content">
+                <h2>Abstract Syntax Tree</h2>
+                {ast_html}
+            </div>
+
+            <div id="icg" class="tab-content">
+                <h2>Intermediate Code Generation</h2>
+                
+                <h3 class="section-title">1. Quadruples (op, arg1, arg2, result)</h3>
+                <table>
+                    <tr><th>Idx</th><th>Operator</th><th>Arg1</th><th>Arg2</th><th>Result</th></tr>
+                    {icg_html}
+                </table>
+                
+                <hr>
+                
+                <h3 class="section-title">2. Triples (op, arg1, arg2)</h3>
+                <p style="opacity: 0.8; margin-bottom: 1rem;">Result is implicitly the index in the array.</p>
+                <table>
+                    <tr><th>Idx</th><th>Operator</th><th>Arg1</th><th>Arg2</th></tr>
+                    {triples_html}
+                </table>
+                
+                <hr>
+                
+                <h3 class="section-title">3. Indirect Triples</h3>
+                <p style="opacity: 0.8; margin-bottom: 1rem;">Triples accessed via an Index Pointer Table.</p>
+                <table>
+                    <tr><th>Ptr</th><th>Instr#</th><th>Idx</th><th>Operator</th><th>Arg1</th><th>Arg2</th></tr>
+                    {indirect_triples_html}
+                </table>
+            </div>
+
+            <div id="opt" class="tab-content">
+                <h2>Optimized ICG (Constant Folding & Propagation)</h2>
+                <table>
+                    <tr><th>Idx</th><th>Operator</th><th>Arg1</th><th>Arg2</th><th>Result</th></tr>
+                    {opt_icg_html}
+                </table>
+            </div>
+
+            <div id="target" class="tab-content">
+                <h2>Assembly Target Code</h2>
+                <div class="code-block">
+                    {target_html}
+                </div>
+            </div>
+        </div>
+
+        <script>
+            function showTab(tabId) {{
+                document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                
+                document.getElementById(tabId).classList.add('active');
+                event.target.classList.add('active');
+            }}
+        </script>
+    </body>
+    </html>
+    """
+    
+    with open('compiler_output.html', 'w', encoding='utf-8') as f:
+        f.write(html_content)
+    print("\\n\\n[+] Generated beautiful HTML report at 'compiler_output.html'")
+    
+    try:
+        webbrowser.open('file://' + os.path.realpath('compiler_output.html'))
+    except:
+        pass
+
+import sys
+
 if __name__ == '__main__':
+    # Get input file from command line, default to inp.py
+    input_file = sys.argv[1] if len(sys.argv) > 1 else 'inp.py'
+    
     # Read input program
-    with open('inp.py', 'r') as f:
+    with open(input_file, 'r') as f:
         source = f.read()
     
     # Run compiler
     result = compile_program(source)
+    
+    # Generate visual HTML report
+    generate_html_report(result)

@@ -1,12 +1,9 @@
-a=10
-b=9
-c=a+b+100
-e=10
-f=8
-d=e*f
-if(a>=b):
-	a=a+b
-	g=e*f*100
+a = 10
+n = 5
+for j in range(n):
+    left = a
+    for k in range(n):
+        if left < a:
+            a = a + 1
+print = 1
 
-u=10
-j=99

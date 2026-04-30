@@ -1,0 +1,220 @@
+
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Mini Python Compiler Report</title>
+        <style>
+            :root {
+                --bg: #0f172a;
+                --surface: rgba(30, 41, 59, 0.7);
+                --text: #f8fafc;
+                --accent: #38bdf8;
+                --border: rgba(255, 255, 255, 0.1);
+            }
+            body {
+                font-family: 'Inter', system-ui, sans-serif;
+                background-color: var(--bg);
+                color: var(--text);
+                margin: 0;
+                padding: 2rem;
+                background-image: radial-gradient(circle at 50% 0%, #1e293b, #0f172a);
+                min-height: 100vh;
+            }
+            .container {
+                max-width: 1200px;
+                margin: 0 auto;
+            }
+            h1 {
+                text-align: center;
+                background: -webkit-linear-gradient(45deg, #38bdf8, #818cf8);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+                font-size: 3rem;
+                margin-bottom: 2rem;
+            }
+            .tabs {
+                display: flex;
+                gap: 1rem;
+                margin-bottom: 2rem;
+                justify-content: center;
+            }
+            .tab-btn {
+                background: var(--surface);
+                border: 1px solid var(--border);
+                color: var(--text);
+                padding: 1rem 2rem;
+                border-radius: 12px;
+                cursor: pointer;
+                font-size: 1.1rem;
+                backdrop-filter: blur(10px);
+                transition: all 0.3s ease;
+            }
+            .tab-btn.active, .tab-btn:hover {
+                background: rgba(56, 189, 248, 0.2);
+                border-color: var(--accent);
+                box-shadow: 0 0 20px rgba(56, 189, 248, 0.2);
+                transform: translateY(-2px);
+            }
+            .tab-content {
+                display: none;
+                background: var(--surface);
+                backdrop-filter: blur(10px);
+                border: 1px solid var(--border);
+                border-radius: 16px;
+                padding: 2rem;
+                animation: fadeIn 0.4s ease-out;
+                box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            }
+            .tab-content.active {
+                display: block;
+            }
+            @keyframes fadeIn {
+                from { opacity: 0; transform: translateY(10px); }
+                to { opacity: 1; transform: translateY(0); }
+            }
+            table {
+                width: 100%;
+                border-collapse: collapse;
+            }
+            th, td {
+                padding: 1rem;
+                text-align: left;
+                border-bottom: 1px solid var(--border);
+            }
+            th {
+                color: var(--accent);
+                font-weight: 600;
+            }
+            tr:hover {
+                background: rgba(255,255,255,0.05);
+            }
+            pre, .code-block {
+                font-family: 'Fira Code', monospace;
+                background: rgba(0,0,0,0.3);
+                padding: 1.5rem;
+                border-radius: 8px;
+                overflow-x: auto;
+                line-height: 1.6;
+            }
+            hr {
+                border: 0;
+                border-top: 1px solid var(--border);
+                margin: 3rem 0;
+            }
+            .section-title {
+                color: var(--accent);
+                font-size: 1.5rem;
+                margin-top: 2rem;
+                margin-bottom: 1rem;
+                border-left: 4px solid var(--accent);
+                padding-left: 1rem;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>Mini Python Compiler Output</h1>
+            
+            <div class="tabs">
+                <button class="tab-btn active" onclick="showTab('lexer')">1. Lexer</button>
+                <button class="tab-btn" onclick="showTab('ast')">2. AST Parser</button>
+                <button class="tab-btn" onclick="showTab('icg')">3. ICG</button>
+                <button class="tab-btn" onclick="showTab('opt')">4. Optimized ICG</button>
+                <button class="tab-btn" onclick="showTab('target')">5. Target Code</button>
+            </div>
+
+            <div id="lexer" class="tab-content active">
+                <h2>Lexical Analysis (Tokens)</h2>
+                <table>
+                    <tr><th>Index</th><th>Token Type</th><th>Value</th><th>Category</th></tr>
+                    <tr><td>0</td><td>ID</td><td>a</td><td>IDENTIFIER</td></tr><tr><td>1</td><td>=</td><td>=</td><td>OPERATOR</td></tr><tr><td>2</td><td>NUM</td><td>10</td><td>NUMBER</td></tr><tr><td>4</td><td>ID</td><td>n</td><td>IDENTIFIER</td></tr><tr><td>5</td><td>=</td><td>=</td><td>OPERATOR</td></tr><tr><td>6</td><td>NUM</td><td>5</td><td>NUMBER</td></tr><tr><td>8</td><td>FOR</td><td>for</td><td>OTHER</td></tr><tr><td>9</td><td>ID</td><td>j</td><td>IDENTIFIER</td></tr><tr><td>10</td><td>IN</td><td>in</td><td>OTHER</td></tr><tr><td>11</td><td>RANGE</td><td>range</td><td>OTHER</td></tr><tr><td>12</td><td>(</td><td>(</td><td>DELIMITER</td></tr><tr><td>13</td><td>ID</td><td>n</td><td>IDENTIFIER</td></tr><tr><td>14</td><td>)</td><td>)</td><td>DELIMITER</td></tr><tr><td>15</td><td>:</td><td>:</td><td>DELIMITER</td></tr><tr><td>17</td><td>INDENT</td><td>INDENT</td><td>OTHER</td></tr><tr><td>18</td><td>ID</td><td>left</td><td>IDENTIFIER</td></tr><tr><td>19</td><td>=</td><td>=</td><td>OPERATOR</td></tr><tr><td>20</td><td>ID</td><td>a</td><td>IDENTIFIER</td></tr><tr><td>22</td><td>INDENT</td><td>INDENT</td><td>OTHER</td></tr><tr><td>23</td><td>FOR</td><td>for</td><td>OTHER</td></tr><tr><td>24</td><td>ID</td><td>k</td><td>IDENTIFIER</td></tr><tr><td>25</td><td>IN</td><td>in</td><td>OTHER</td></tr><tr><td>26</td><td>RANGE</td><td>range</td><td>OTHER</td></tr><tr><td>27</td><td>(</td><td>(</td><td>DELIMITER</td></tr><tr><td>28</td><td>ID</td><td>n</td><td>IDENTIFIER</td></tr><tr><td>29</td><td>)</td><td>)</td><td>DELIMITER</td></tr><tr><td>30</td><td>:</td><td>:</td><td>DELIMITER</td></tr><tr><td>32</td><td>INDENT</td><td>INDENT</td><td>OTHER</td></tr><tr><td>33</td><td>IF</td><td>if</td><td>KEYWORD</td></tr><tr><td>34</td><td>ID</td><td>left</td><td>IDENTIFIER</td></tr><tr><td>35</td><td><</td><td><</td><td>OPERATOR</td></tr><tr><td>36</td><td>ID</td><td>a</td><td>IDENTIFIER</td></tr><tr><td>37</td><td>:</td><td>:</td><td>DELIMITER</td></tr><tr><td>39</td><td>INDENT</td><td>INDENT</td><td>OTHER</td></tr><tr><td>40</td><td>ID</td><td>a</td><td>IDENTIFIER</td></tr><tr><td>41</td><td>=</td><td>=</td><td>OPERATOR</td></tr><tr><td>42</td><td>ID</td><td>a</td><td>IDENTIFIER</td></tr><tr><td>43</td><td>+</td><td>+</td><td>OPERATOR</td></tr><tr><td>44</td><td>NUM</td><td>1</td><td>NUMBER</td></tr><tr><td>46</td><td>PRINT</td><td>print</td><td>KEYWORD</td></tr><tr><td>47</td><td>=</td><td>=</td><td>OPERATOR</td></tr><tr><td>48</td><td>NUM</td><td>1</td><td>NUMBER</td></tr>
+                </table>
+            </div>
+
+            <div id="ast" class="tab-content">
+                <h2>Abstract Syntax Tree</h2>
+                <pre>(PROGRAM
+  (= a)
+  (= n)
+  (FOR
+    (ID j)
+    (ID n)
+    (BODY
+      (= left)
+      (FOR
+        (ID k)
+        (ID n)
+        (BODY
+          (IF
+            (&lt;
+              (ID left)
+              (ID a)
+            )
+            (BODY
+              (= a)
+            )
+          )
+        )
+      )
+    )
+  )
+  (= print)
+)</pre>
+            </div>
+
+            <div id="icg" class="tab-content">
+                <h2>Intermediate Code Generation</h2>
+                
+                <h3 class="section-title">1. Quadruples (op, arg1, arg2, result)</h3>
+                <table>
+                    <tr><th>Idx</th><th>Operator</th><th>Arg1</th><th>Arg2</th><th>Result</th></tr>
+                    <tr><td>0</td><td>=</td><td>10</td><td></td><td>a</td></tr><tr><td>1</td><td>=</td><td>5</td><td></td><td>n</td></tr><tr><td>2</td><td>=</td><td>0</td><td></td><td>j</td></tr><tr><td>3</td><td>label</td><td>l0</td><td></td><td></td></tr><tr><td>4</td><td><</td><td>j</td><td>n</td><td>t0</td></tr><tr><td>5</td><td>if_not</td><td>t0</td><td></td><td>l1</td></tr><tr><td>6</td><td>=</td><td>a</td><td></td><td>left</td></tr><tr><td>7</td><td>=</td><td>0</td><td></td><td>k</td></tr><tr><td>8</td><td>label</td><td>l2</td><td></td><td></td></tr><tr><td>9</td><td><</td><td>k</td><td>n</td><td>t1</td></tr><tr><td>10</td><td>if_not</td><td>t1</td><td></td><td>l3</td></tr><tr><td>11</td><td><</td><td>left</td><td>a</td><td>t2</td></tr><tr><td>12</td><td>if_not</td><td>t2</td><td></td><td>l4</td></tr><tr><td>13</td><td>+</td><td>a</td><td>1</td><td>t3</td></tr><tr><td>14</td><td>=</td><td>t3</td><td></td><td>a</td></tr><tr><td>15</td><td>label</td><td>l4</td><td></td><td></td></tr><tr><td>16</td><td>+</td><td>k</td><td>1</td><td>t4</td></tr><tr><td>17</td><td>=</td><td>t4</td><td></td><td>k</td></tr><tr><td>18</td><td>goto</td><td></td><td></td><td>l2</td></tr><tr><td>19</td><td>label</td><td>l3</td><td></td><td></td></tr><tr><td>20</td><td>+</td><td>j</td><td>1</td><td>t5</td></tr><tr><td>21</td><td>=</td><td>t5</td><td></td><td>j</td></tr><tr><td>22</td><td>goto</td><td></td><td></td><td>l0</td></tr><tr><td>23</td><td>label</td><td>l1</td><td></td><td></td></tr><tr><td>24</td><td>=</td><td>1</td><td></td><td>print</td></tr>
+                </table>
+                
+                <hr>
+                
+                <h3 class="section-title">2. Triples (op, arg1, arg2)</h3>
+                <p style="opacity: 0.8; margin-bottom: 1rem;">Result is implicitly the index in the array.</p>
+                <table>
+                    <tr><th>Idx</th><th>Operator</th><th>Arg1</th><th>Arg2</th></tr>
+                    <tr><td>0</td><td>=</td><td>10</td><td></td></tr><tr><td>1</td><td>=</td><td>5</td><td></td></tr><tr><td>2</td><td>=</td><td>0</td><td></td></tr><tr><td>3</td><td>label</td><td>l0</td><td></td></tr><tr><td>4</td><td><</td><td>j</td><td>n</td></tr><tr><td>5</td><td>if_not</td><td>t0</td><td></td></tr><tr><td>6</td><td>=</td><td>a</td><td></td></tr><tr><td>7</td><td>=</td><td>0</td><td></td></tr><tr><td>8</td><td>label</td><td>l2</td><td></td></tr><tr><td>9</td><td><</td><td>k</td><td>n</td></tr><tr><td>10</td><td>if_not</td><td>t1</td><td></td></tr><tr><td>11</td><td><</td><td>left</td><td>a</td></tr><tr><td>12</td><td>if_not</td><td>t2</td><td></td></tr><tr><td>13</td><td>+</td><td>a</td><td>1</td></tr><tr><td>14</td><td>=</td><td>t3</td><td></td></tr><tr><td>15</td><td>label</td><td>l4</td><td></td></tr><tr><td>16</td><td>+</td><td>k</td><td>1</td></tr><tr><td>17</td><td>=</td><td>t4</td><td></td></tr><tr><td>18</td><td>goto</td><td></td><td></td></tr><tr><td>19</td><td>label</td><td>l3</td><td></td></tr><tr><td>20</td><td>+</td><td>j</td><td>1</td></tr><tr><td>21</td><td>=</td><td>t5</td><td></td></tr><tr><td>22</td><td>goto</td><td></td><td></td></tr><tr><td>23</td><td>label</td><td>l1</td><td></td></tr><tr><td>24</td><td>=</td><td>1</td><td></td></tr>
+                </table>
+                
+                <hr>
+                
+                <h3 class="section-title">3. Indirect Triples</h3>
+                <p style="opacity: 0.8; margin-bottom: 1rem;">Triples accessed via an Index Pointer Table.</p>
+                <table>
+                    <tr><th>Ptr</th><th>Instr#</th><th>Idx</th><th>Operator</th><th>Arg1</th><th>Arg2</th></tr>
+                    <tr><td>0</td><td>0</td><td>0</td><td>=</td><td>10</td><td></td></tr><tr><td>1</td><td>1</td><td>1</td><td>=</td><td>5</td><td></td></tr><tr><td>2</td><td>2</td><td>2</td><td>=</td><td>0</td><td></td></tr><tr><td>3</td><td>3</td><td>3</td><td>label</td><td>l0</td><td></td></tr><tr><td>4</td><td>4</td><td>4</td><td><</td><td>j</td><td>n</td></tr><tr><td>5</td><td>5</td><td>5</td><td>if_not</td><td>t0</td><td></td></tr><tr><td>6</td><td>6</td><td>6</td><td>=</td><td>a</td><td></td></tr><tr><td>7</td><td>7</td><td>7</td><td>=</td><td>0</td><td></td></tr><tr><td>8</td><td>8</td><td>8</td><td>label</td><td>l2</td><td></td></tr><tr><td>9</td><td>9</td><td>9</td><td><</td><td>k</td><td>n</td></tr><tr><td>10</td><td>10</td><td>10</td><td>if_not</td><td>t1</td><td></td></tr><tr><td>11</td><td>11</td><td>11</td><td><</td><td>left</td><td>a</td></tr><tr><td>12</td><td>12</td><td>12</td><td>if_not</td><td>t2</td><td></td></tr><tr><td>13</td><td>13</td><td>13</td><td>+</td><td>a</td><td>1</td></tr><tr><td>14</td><td>14</td><td>14</td><td>=</td><td>t3</td><td></td></tr><tr><td>15</td><td>15</td><td>15</td><td>label</td><td>l4</td><td></td></tr><tr><td>16</td><td>16</td><td>16</td><td>+</td><td>k</td><td>1</td></tr><tr><td>17</td><td>17</td><td>17</td><td>=</td><td>t4</td><td></td></tr><tr><td>18</td><td>18</td><td>18</td><td>goto</td><td></td><td></td></tr><tr><td>19</td><td>19</td><td>19</td><td>label</td><td>l3</td><td></td></tr><tr><td>20</td><td>20</td><td>20</td><td>+</td><td>j</td><td>1</td></tr><tr><td>21</td><td>21</td><td>21</td><td>=</td><td>t5</td><td></td></tr><tr><td>22</td><td>22</td><td>22</td><td>goto</td><td></td><td></td></tr><tr><td>23</td><td>23</td><td>23</td><td>label</td><td>l1</td><td></td></tr><tr><td>24</td><td>24</td><td>24</td><td>=</td><td>1</td><td></td></tr>
+                </table>
+            </div>
+
+            <div id="opt" class="tab-content">
+                <h2>Optimized ICG (Constant Folding & Propagation)</h2>
+                <table>
+                    <tr><th>Idx</th><th>Operator</th><th>Arg1</th><th>Arg2</th><th>Result</th></tr>
+                    <tr><td>0</td><td>=</td><td>10</td><td></td><td>a</td></tr><tr><td>1</td><td>=</td><td>5</td><td></td><td>n</td></tr><tr><td>2</td><td>=</td><td>0</td><td></td><td>j</td></tr><tr><td>3</td><td>label</td><td>l0</td><td></td><td></td></tr><tr><td>4</td><td><</td><td>j</td><td>n</td><td>t0</td></tr><tr><td>5</td><td>if_not</td><td>t0</td><td></td><td>l1</td></tr><tr><td>6</td><td>=</td><td>a</td><td></td><td>left</td></tr><tr><td>7</td><td>=</td><td>0</td><td></td><td>k</td></tr><tr><td>8</td><td>label</td><td>l2</td><td></td><td></td></tr><tr><td>9</td><td><</td><td>k</td><td>n</td><td>t1</td></tr><tr><td>10</td><td>if_not</td><td>t1</td><td></td><td>l3</td></tr><tr><td>11</td><td><</td><td>left</td><td>a</td><td>t2</td></tr><tr><td>12</td><td>if_not</td><td>t2</td><td></td><td>l4</td></tr><tr><td>13</td><td>+</td><td>10</td><td>1</td><td>t3</td></tr><tr><td>14</td><td>=</td><td>t3</td><td></td><td>a</td></tr><tr><td>15</td><td>label</td><td>l4</td><td></td><td></td></tr><tr><td>16</td><td>+</td><td>0</td><td>1</td><td>t4</td></tr><tr><td>17</td><td>=</td><td>t4</td><td></td><td>k</td></tr><tr><td>18</td><td>goto</td><td></td><td></td><td>l2</td></tr><tr><td>19</td><td>label</td><td>l3</td><td></td><td></td></tr><tr><td>20</td><td>+</td><td>0</td><td>1</td><td>t5</td></tr><tr><td>21</td><td>=</td><td>t5</td><td></td><td>j</td></tr><tr><td>22</td><td>goto</td><td></td><td></td><td>l0</td></tr><tr><td>23</td><td>label</td><td>l1</td><td></td><td></td></tr><tr><td>24</td><td>=</td><td>1</td><td></td><td>print</td></tr>
+                </table>
+            </div>
+
+            <div id="target" class="tab-content">
+                <h2>Assembly Target Code</h2>
+                <div class="code-block">
+                    <div> 0. MOV R0, #10</div><div> 1. MOV R1, #5</div><div> 2. MOV R2, #0</div><div> 3. l0:</div><div> 4. BNEQZ R3, </div><div> 5. MOV R4, #a</div><div> 6. MOV R5, #0</div><div> 7. l2:</div><div> 8. BNEQZ R6, </div><div> 9. BNEQZ R7, </div><div>10. ADD R10, R8, R9</div><div>11. MOV R0, #t3</div><div>12. l4:</div><div>13. ADD R12, R11, R9</div><div>14. MOV R5, #t4</div><div>15. l3:</div><div>16. ST a, R0</div><div>17. ADD R0, R11, R9</div><div>18. MOV R2, #t5</div><div>19. l1:</div><div>20. ST n, R1</div><div>21. MOV R1, #1</div><div>22. ST j, R2</div><div>23. ST left, R4</div><div>24. ST k, R5</div><div>25. ST 10, R8</div><div>26. ST 1, R9</div><div>27. ST 0, R11</div><div>28. ST print, R1</div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            function showTab(tabId) {
+                document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                
+                document.getElementById(tabId).classList.add('active');
+                event.target.classList.add('active');
+            }
+        </script>
+    </body>
+    </html>
+    

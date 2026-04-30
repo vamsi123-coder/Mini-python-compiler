@@ -11,6 +11,9 @@
 if          { return IF;    }
 else        { return ELSE;  }
 while       { return WHILE; }
+for         { return FOR;   }
+in          { return IN;    }
+range       { return RANGE; }
 print       { return PRINT; }
 True        { return T;     }
 False       { return F;     }

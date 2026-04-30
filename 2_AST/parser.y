@@ -29,7 +29,7 @@ void printTree(node *n) {
 }
 %}
 
-%token ID NUM STRING IF ELSE WHILE PRINT
+%token ID NUM STRING IF ELSE WHILE PRINT FOR IN RANGE
 %token PLUS MINUS MUL DIVIDE EQUAL
 %token GREATERTHANEQUAL LESSTHAN LESSTHANEQUAL GREATERTHAN DOUBLEEQUAL
 %token NL INDENT COLON SPECIAL_START SPECIAL_END COMMA T F
@@ -49,16 +49,29 @@ stmt
     : ID EQUAL expr NL       { $$ = newNode("=",  newNode($1,0,0), $3); }
     | IF SPECIAL_START expr SPECIAL_END COLON NL body
                              { $$ = newNode("IF", $3, $7); }
+    | WHILE SPECIAL_START expr SPECIAL_END COLON NL body
+                             { $$ = newNode("WHILE", $3, $7); }
+    | FOR ID IN RANGE SPECIAL_START expr SPECIAL_END COLON NL body
+                             { $$ = newNode("FOR", newNode($2,0,0), $10); }
     ;
 
 body
-    : INDENT stmt            { $$ = $2; }
+    : block_stmts            { $$ = $1; }
+    ;
+
+block_stmts
+    : INDENT stmt block_stmts { $$ = newNode("SEQ", $2, $3); }
+    | INDENT stmt             { $$ = $2; }
     ;
 
 expr
     : expr PLUS  term        { $$ = newNode("+", $1, $3); }
     | expr MINUS term        { $$ = newNode("-", $1, $3); }
     | expr GREATERTHANEQUAL term { $$ = newNode(">=", $1, $3); }
+    | expr LESSTHANEQUAL term { $$ = newNode("<=", $1, $3); }
+    | expr GREATERTHAN term  { $$ = newNode(">", $1, $3); }
+    | expr LESSTHAN term     { $$ = newNode("<", $1, $3); }
+    | expr DOUBLEEQUAL term  { $$ = newNode("==", $1, $3); }
     | term                   { $$ = $1; }
     ;
 
