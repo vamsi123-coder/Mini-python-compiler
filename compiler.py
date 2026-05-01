@@ -432,47 +432,412 @@ class CodeGenerator:
 # ═══════════════════════════════════════════════════════════════════════════════
 # PHASE 4 — OPTIMIZED ICG (Constant Propagation + Dead Code Elimination)
 # ═══════════════════════════════════════════════════════════════════════════════
-
 class Optimizer:
-    def __init__(self, symbol_table):
+    def __init__(self, symbol_table: dict):
         self.symbol_table = symbol_table
+ 
+        # Bookkeeping reset at the start of each optimize() call
+        self.constants: dict[str, int]   = {}   # var -> known constant value
+        self.copies:    dict[str, str]   = {}   # var -> canonical source
+        self.avail:     dict[tuple, str] = {}   # (op,a,b) -> tmp holding result
+        self.log:       list[str]        = []   # human-readable pass notes
+ 
+    # -----------------------------------------------------------------------
+    # Public entry point
+    # -----------------------------------------------------------------------
+ 
+    def optimize(self, code: list[Instr]) -> list[Instr]:
+        """
+        Apply all optimisation passes and return the improved instruction list.
+        Call self.log after this to see what each pass did.
+        """
         self.constants = {}
-    
-    def optimize(self, code):
-        """Apply constant propagation and folding"""
-        optimized = []
-        
-        for op, arg1, arg2, result in code:
-            # Constant propagation
-            if op == '=':
-                try:
-                    value = int(arg1)
-                    self.constants[result] = value
-                    optimized.append((op, arg1, arg2, result))
-                except:
-                    optimized.append((op, arg1, arg2, result))
-            
-            # Constant folding for binary operations
-            elif op in ['+', '-', '*', '/']:
-                new_arg1 = str(self.constants.get(arg1, arg1))
-                new_arg2 = str(self.constants.get(arg2, arg2))
-                
-                try:
-                    val1, val2 = int(new_arg1), int(new_arg2)
-                    if op == '+': folded = val1 + val2
-                    elif op == '-': folded = val1 - val2
-                    elif op == '*': folded = val1 * val2
-                    elif op == '/': folded = val1 // val2
-                    
-                    self.constants[result] = folded
-                    optimized.append((op, new_arg1, new_arg2, result))
-                except:
-                    optimized.append((op, arg1, arg2, result))
-            
+        self.copies    = {}
+        self.avail     = {}
+        self.log       = []
+ 
+        code = self._constant_propagation(code)
+        code = self._copy_propagation(code)
+        code = self._constant_folding(code)
+        code = self._common_subexpression_elimination(code)
+        code = self._strength_reduction(code)
+        code = self._loop_invariant_code_motion(code)
+        code = self._dead_code_elimination(code)
+        code = self._peephole_optimization(code)
+ 
+        return code
+ 
+    # -----------------------------------------------------------------------
+    # Pass 1 — Constant propagation
+    # Replace every use of a variable known to hold a constant with that value.
+    # -----------------------------------------------------------------------
+ 
+    def _constant_propagation(self, code: list[Instr]) -> list[Instr]:
+        constants: dict[str, str] = {}   # var -> literal string of its value
+        result = []
+ 
+        for op, a1, a2, res in code:
+            # Track simple assignments of a literal
+            if op == '=' and a1 is not None and self._is_literal(a1):
+                constants[res] = a1
+ 
+            # Substitute known constants into operands
+            new_a1 = constants.get(a1, a1) if a1 is not None else a1
+            new_a2 = constants.get(a2, a2) if a2 is not None else a2
+ 
+            if new_a1 != a1 or new_a2 != a2:
+                self.log.append(
+                    f"[ConstProp] {op} {a1},{a2}->{res}  =>  {op} {new_a1},{new_a2}->{res}"
+                )
+ 
+            result.append((op, new_a1, new_a2, res))
+ 
+        return result
+ 
+    # -----------------------------------------------------------------------
+    # Pass 2 — Copy propagation
+    # When x = y, replace later uses of x with y (the original source).
+    # -----------------------------------------------------------------------
+ 
+    def _copy_propagation(self, code: list[Instr]) -> list[Instr]:
+        copies: dict[str, str] = {}
+        result = []
+ 
+        for op, a1, a2, res in code:
+            # Look up the canonical source for each operand
+            new_a1 = self._resolve_copy(a1, copies)
+            new_a2 = self._resolve_copy(a2, copies)
+ 
+            if op == '=' and new_a1 is not None and not self._is_literal(new_a1):
+                copies[res] = new_a1   # record the copy
+ 
+            # If res is reassigned, the old copy is no longer valid
+            if res is not None:
+                copies.pop(res, None)
+ 
+            if new_a1 != a1 or new_a2 != a2:
+                self.log.append(
+                    f"[CopyProp] {op} {a1},{a2}->{res}  =>  {op} {new_a1},{new_a2}->{res}"
+                )
+ 
+            result.append((op, new_a1, new_a2, res))
+ 
+        return result
+ 
+    # -----------------------------------------------------------------------
+    # Pass 3 — Constant folding
+    # Evaluate binary/unary expressions whose operands are both constants.
+    # -----------------------------------------------------------------------
+ 
+    def _constant_folding(self, code: list[Instr]) -> list[Instr]:
+        self.constants = {}   # var -> int (used by later passes too)
+        result = []
+ 
+        for op, a1, a2, res in code:
+            if op == '=' and a1 is not None and self._is_literal(a1):
+                self.constants[res] = int(a1)
+                result.append((op, a1, a2, res))
+                continue
+ 
+            if op in ('+', '-', '*', '/', '%', '**'):
+                v1 = self._as_int(a1)
+                v2 = self._as_int(a2)
+                if v1 is not None and v2 is not None and not (op in ('/', '%') and v2 == 0):
+                    folded = self._eval(op, v1, v2)
+                    if folded is not None:
+                        self.log.append(
+                            f"[ConstFold] {a1} {op} {a2} = {folded}  ->  {res}"
+                        )
+                        self.constants[res] = folded
+                        result.append(('=', str(folded), None, res))
+                        continue
+ 
+            # Track unmodified result constants
+            if op == '=' and a1 is not None and self._is_literal(a1):
+                self.constants[res] = int(a1)
+ 
+            result.append((op, a1, a2, res))
+ 
+        return result
+ 
+    # -----------------------------------------------------------------------
+    # Pass 4 — Common subexpression elimination (CSE)
+    # If (op a1 a2) was already computed into tmp_x, reuse tmp_x.
+    # -----------------------------------------------------------------------
+ 
+    def _common_subexpression_elimination(self, code: list[Instr]) -> list[Instr]:
+        available: dict[tuple, str] = {}   # (op, a1, a2) -> result var
+        result = []
+ 
+        for op, a1, a2, res in code:
+            if op in ('+', '-', '*', '/', '%', '**'):
+                key = (op, a1, a2)
+                comm_key = (op, a2, a1) if op in ('+', '*') else None
+ 
+                existing = available.get(key) or (comm_key and available.get(comm_key))
+                if existing and existing != res:
+                    self.log.append(
+                        f"[CSE] {a1} {op} {a2} already in {existing}; reusing for {res}"
+                    )
+                    result.append(('=', existing, None, res))
+                    # Mark res as an alias
+                    available[(op, a1, a2)] = existing
+                    continue
+ 
+                available[key] = res
+ 
+            # Any assignment to res invalidates cached exprs that used res
+            if res is not None:
+                available = {k: v for k, v in available.items()
+                             if v != res and k[1] != res and k[2] != res}
+ 
+            result.append((op, a1, a2, res))
+ 
+        return result
+ 
+    # -----------------------------------------------------------------------
+    # Pass 5 — Strength reduction
+    # Replace costly operations with cheaper equivalents.
+    #   x * 2   ->  x + x
+    #   x * 1   ->  x  (via assignment)
+    #   x * 0   ->  0
+    #   x ** 2  ->  x * x
+    #   x / 1   ->  x
+    # -----------------------------------------------------------------------
+ 
+    def _strength_reduction(self, code: list[Instr]) -> list[Instr]:
+        result = []
+ 
+        for op, a1, a2, res in code:
+            reduced = None
+ 
+            if op == '*':
+                v1, v2 = self._as_int(a1), self._as_int(a2)
+                if v2 == 0 or v1 == 0:
+                    reduced = ('=', '0', None, res)
+                elif v2 == 1:
+                    reduced = ('=', a1, None, res)
+                elif v1 == 1:
+                    reduced = ('=', a2, None, res)
+                elif v2 == 2:
+                    reduced = ('+', a1, a1, res)
+                elif v1 == 2:
+                    reduced = ('+', a2, a2, res)
+ 
+            elif op == '/' and self._as_int(a2) == 1:
+                reduced = ('=', a1, None, res)
+ 
+            elif op == '**' and self._as_int(a2) == 2:
+                reduced = ('*', a1, a1, res)
+ 
+            elif op == '+':
+                v1, v2 = self._as_int(a1), self._as_int(a2)
+                if v1 == 0:
+                    reduced = ('=', a2, None, res)
+                elif v2 == 0:
+                    reduced = ('=', a1, None, res)
+ 
+            elif op == '-' and self._as_int(a2) == 0:
+                reduced = ('=', a1, None, res)
+ 
+            if reduced:
+                self.log.append(
+                    f"[StrReduce] {a1} {op} {a2} -> {res}  =>  {reduced}"
+                )
+                result.append(reduced)
             else:
-                optimized.append((op, arg1, arg2, result))
-        
-        return optimized
+                result.append((op, a1, a2, res))
+ 
+        return result
+ 
+    # -----------------------------------------------------------------------
+    # Pass 6 — Loop invariant code motion (LICM)
+    # Detect LOOP_BEGIN / LOOP_END markers and hoist invariant computations.
+    #
+    # Expected instruction forms:
+    #   ('LOOP_BEGIN', None, None, None)
+    #   ('LOOP_END',   None, None, None)
+    # Everything between them is treated as a single loop body.
+    # -----------------------------------------------------------------------
+ 
+    def _loop_invariant_code_motion(self, code: list[Instr]) -> list[Instr]:
+        result:  list[Instr] = []
+        i = 0
+ 
+        while i < len(code):
+            op, a1, a2, res = code[i]
+ 
+            if op != 'LOOP_BEGIN':
+                result.append(code[i])
+                i += 1
+                continue
+ 
+            # Collect the loop body
+            j = i + 1
+            loop_body: list[Instr] = []
+            while j < len(code) and code[j][0] != 'LOOP_END':
+                loop_body.append(code[j])
+                j += 1
+ 
+            # Variables defined inside the loop (may change each iteration)
+            defined_in_loop: set[str] = {instr[3] for instr in loop_body if instr[3]}
+ 
+            invariant:     list[Instr] = []
+            new_loop_body: list[Instr] = []
+ 
+            for instr in loop_body:
+                iop, ia1, ia2, ires = instr
+                deps = {x for x in (ia1, ia2) if x is not None and not self._is_literal(x)}
+ 
+                # Invariant if: is a binary/unary op whose dependencies are all
+                # either literals or variables defined OUTSIDE the loop
+                if iop in ('+', '-', '*', '/', '%', '**', '=') and \
+                   not (deps & defined_in_loop):
+                    self.log.append(f"[LICM] hoisting: {iop} {ia1},{ia2}->{ires}")
+                    invariant.append(instr)
+                    defined_in_loop.discard(ires)   # no longer varies in loop
+                else:
+                    new_loop_body.append(instr)
+ 
+            # Emit: hoisted code, then the slimmer loop
+            result.extend(invariant)
+            result.append(('LOOP_BEGIN', None, None, None))
+            result.extend(new_loop_body)
+            result.append(('LOOP_END', None, None, None))
+ 
+            i = j + 1   # skip past LOOP_END
+ 
+        return result
+ 
+    # -----------------------------------------------------------------------
+    # Pass 7 — Dead code elimination (DCE)
+    # Remove instructions whose result is never subsequently used.
+    # -----------------------------------------------------------------------
+ 
+    def _dead_code_elimination(self, code: list[Instr]) -> list[Instr]:
+        # Collect all used variables (= any arg that is not a literal)
+        used: set[str] = set()
+        for op, a1, a2, res in code:
+            for arg in (a1, a2):
+                if arg is not None and not self._is_literal(arg):
+                    used.add(arg)
+ 
+        result = []
+        for instr in code:
+            op, a1, a2, res = instr
+            # Keep if: no result, result is used, it's a control-flow op, or
+            # it could have side-effects (CALL, PRINT, etc.)
+            if res is None or res in used or op in ('LOOP_BEGIN', 'LOOP_END',
+                                                     'CALL', 'PRINT', 'RETURN'):
+                result.append(instr)
+            else:
+                self.log.append(f"[DCE] removed dead: {op} {a1},{a2}->{res}")
+ 
+        return result
+ 
+    # -----------------------------------------------------------------------
+    # Pass 8 — Peephole optimisation
+    # Inspect a small sliding window and replace inefficient patterns:
+    #   x = y followed immediately by y = x  ->  drop the second
+    #   x = x                                ->  drop (self-assignment)
+    #   x = 0; y = x + 0                    ->  handled by const propagation,
+    #                                            but catch any stragglers here
+    # -----------------------------------------------------------------------
+ 
+    def _peephole_optimization(self, code: list[Instr]) -> list[Instr]:
+        changed = True
+        while changed:
+            changed = False
+            result: list[Instr] = []
+            skip: set[int] = set()
+ 
+            for i, instr in enumerate(code):
+                if i in skip:
+                    continue
+ 
+                op, a1, a2, res = instr
+ 
+                # Pattern: x = x  (self-assignment)
+                if op == '=' and a1 == res and a2 is None:
+                    self.log.append(f"[Peephole] dropped self-assignment: {res} = {a1}")
+                    changed = True
+                    continue
+ 
+                # Pattern: t1 = t2 ; t2 = t1  (swap — drop the reverse copy)
+                if i + 1 < len(code):
+                    nop, na1, na2, nres = code[i + 1]
+                    if op == '=' and nop == '=' and a2 is None and na2 is None:
+                        if a1 == nres and na1 == res:
+                            self.log.append(
+                                f"[Peephole] dropped redundant swap: {nop} {na1}->{nres}"
+                            )
+                            result.append(instr)
+                            skip.add(i + 1)
+                            changed = True
+                            continue
+ 
+                # Pattern: add / sub 0 survivors
+                if op in ('+', '-') and a2 is not None and self._as_int(a2) == 0:
+                    self.log.append(f"[Peephole] {op} 0 is a no-op; replaced with copy")
+                    result.append(('=', a1, None, res))
+                    changed = True
+                    continue
+                if op == '+' and a1 is not None and self._as_int(a1) == 0:
+                    self.log.append(f"[Peephole] 0 + x is a no-op; replaced with copy")
+                    result.append(('=', a2, None, res))
+                    changed = True
+                    continue
+ 
+                result.append(instr)
+ 
+            code = result
+ 
+        return code
+ 
+    # -----------------------------------------------------------------------
+    # Helpers
+    # -----------------------------------------------------------------------
+ 
+    @staticmethod
+    def _is_literal(value: Optional[str]) -> bool:
+        if value is None:
+            return False
+        try:
+            int(value)
+            return True
+        except (ValueError, TypeError):
+            return False
+ 
+    def _as_int(self, value: Optional[str]) -> Optional[int]:
+        if value is None:
+            return None
+        if self._is_literal(value):
+            return int(value)
+        return self.constants.get(value)
+ 
+    @staticmethod
+    def _eval(op: str, v1: int, v2: int) -> Optional[int]:
+        try:
+            if op == '+':  return v1 + v2
+            if op == '-':  return v1 - v2
+            if op == '*':  return v1 * v2
+            if op == '/':  return v1 // v2
+            if op == '%':  return v1 % v2
+            if op == '**': return v1 ** v2
+        except (ZeroDivisionError, OverflowError):
+            pass
+        return None
+ 
+    @staticmethod
+    def _resolve_copy(var: Optional[str], copies: dict[str, str]) -> Optional[str]:
+        if var is None:
+            return None
+        # Follow the chain to the ultimate source
+        seen = set()
+        while var in copies and var not in seen:
+            seen.add(var)
+            var = copies[var]
+        return var
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # PHASE 5 — TARGET CODE GENERATION (Assembly-like)
