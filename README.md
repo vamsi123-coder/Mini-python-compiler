@@ -1,8 +1,8 @@
-# 🐍 Mini Python Compiler — 5 Phase Implementation
+# Mini Python Compiler  Implementation
 
 ---
 
-## 👥 Team
+##  Team
 
 | S.No | Name | Roll Number |
 |------|------|-------------|
@@ -14,14 +14,14 @@
 
 | Field | Details |
 |-------|---------|
-| 🎓 Guide | Dr. G. Vanitha |
-| 🏫 College | Chaitanya Bharathi Institute of Technology (CBIT), Hyderabad |
-| 📅 Year | 2025–2026 |
-| 🔧 Language | C (Flex + Bison + GCC) + Python |
+|  Guide | Dr. G. Vanitha |
+|  College | Chaitanya Bharathi Institute of Technology (CBIT), Hyderabad |
+|  Year | 2025–2026 |
+|  Language | C (Flex + Bison + GCC) + Python |
 
 ---
 
-## 📥 Input Program (`inp.py`)
+##  Input Program (`inp.py`)
 
 ```python
 a = 10
@@ -39,7 +39,7 @@ j = 99
 
 ---
 
-## 🔄 Compiler Pipeline
+##  Compiler Pipeline
 
 ```
 inp.py
@@ -62,7 +62,7 @@ inp.py
 
 ---
 
-## ⚙️ Phases Overview
+##  Phases Overview
 
 ### 🔹 Phase 1 — Lexical Analysis
 Converts raw source code into a stream of tokens and builds the Symbol Table.
@@ -84,7 +84,7 @@ Validates grammar using Bison and constructs an Abstract Syntax Tree (AST).
 
 ---
 
-### 🔹 Phase 3 — Intermediate Code Generation
+###  Phase 3 — Intermediate Code Generation
 Produces Three-Address Code (TAC) from the AST.
 
 ```
@@ -99,7 +99,7 @@ L1:
 
 ---
 
-### 🔹 Phase 4 — Optimised ICG
+###  Phase 4 — Optimised ICG
 Applies **Constant Folding** and **Constant Propagation** to reduce redundant computations.
 
 ```
@@ -110,7 +110,7 @@ t1 = t0 + 100       ──►      c  = 119
 
 ---
 
-### 🔹 Phase 5 — Target Code Generation
+###  Phase 5 — Target Code Generation
 Converts optimised TAC to assembly-like instructions using **FIFO register allocation**.
 
 ```asm
@@ -123,7 +123,7 @@ ADD R4, R2, R3
 
 ---
 
-## 📁 Folder Structure
+##  Folder Structure
 
 ```
 mini-python-compiler/
@@ -149,7 +149,7 @@ mini-python-compiler/
 
 ---
 
-## 🛠️ Tools & Technologies
+##  Tools & Technologies
 
 | Tool | Version | Purpose |
 |------|---------|---------|
@@ -161,9 +161,9 @@ mini-python-compiler/
 
 ---
 
-## 🚀 How to Run
+##  How to Run
 
-### ▶️ Phases 1–4 (Lexer → Parser → ICG → Optimised ICG)
+###  Phases 1–4 (Lexer → Parser → ICG → Optimised ICG)
 
 ```bash
 cd 1_Lexer/
@@ -173,7 +173,7 @@ gcc lex.yy.c proj1.tab.c -o compiler -lm
 ./compiler < ../inp.py
 ```
 
-### ▶️ Phase 5 (Target Code Generation)
+###  Phase 5 (Target Code Generation)
 
 ```bash
 cd 5_Target_Code/
@@ -183,7 +183,7 @@ python3 target_code.py
 
 ---
 
-## 🎯 Objective
+##  Objective
 
 Design and implement a complete mini compiler for a subset of Python to understand each stage of the compilation process end-to-end:
 
@@ -197,7 +197,7 @@ Design and implement a complete mini compiler for a subset of Python to understa
 
 ---
 
-## 📌 Notes
+##  Notes
 
 - All phases are implemented independently by individual team members.
 - Phases 1–4 use **Flex + Bison + GCC** on a Linux/WSL environment.
