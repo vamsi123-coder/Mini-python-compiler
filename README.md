@@ -205,3 +205,11 @@ Design and implement a complete mini compiler for a subset of Python to understa
 - Phase 5 uses **Python** and reads TAC from `IntermediateCode.txt`.
 - The project covers the full front-end and back-end of a compiler.
 ```
+---
+
+## 📄 License
+
+This project is developed for academic purposes at **Chaitanya Bharathi Institute of Technology (CBIT), Hyderabad** under the guidance of **Dr. G. Vanitha**.
+
+Not intended for commercial use. All rights reserved © 2025–2026 by the project team.
+
